@@ -21,6 +21,7 @@ class OktaOidcBrowserTask: OktaOidcTask {
     var userAgentSession: OKTExternalUserAgentSession?
     
     func signIn(delegate: OktaNetworkRequestCustomizationDelegate? = nil,
+                validator: OKTTokenValidator,
                 callback: @escaping ((OKTAuthState?, OktaOidcError?) -> Void)) {
         self.downloadOidcConfiguration() { oidConfig, error in
             guard let oidConfiguration = oidConfig else {
@@ -40,26 +41,37 @@ class OktaOidcBrowserTask: OktaOidcTask {
                                                   responseType: OKTResponseTypeCode,
                                                   additionalParameters: self.config.additionalParams)
             guard let externalUserAgent = self.externalUserAgent() else {
-                callback(nil, OktaOidcError.APIError("Authorization Error: \(error?.localizedDescription ?? "No external User Agent.")"))
+                callback(nil, OktaOidcError.api(message: "Authorization Error: \(error?.localizedDescription ?? "No external User Agent.")", underlyingError: nil))
                 return
             }
 
             let userAgentSession = self.authStateClass().authState(byPresenting: request,
                                                                    externalUserAgent: externalUserAgent,
-                                                                   delegate: delegate) { authorizationResponse, error in
+                                                                   delegate: delegate,
+                                                                   validator: validator) { authorizationResponse, error in
                 defer { self.userAgentSession = nil }
 
-                guard let authResponse = authorizationResponse else {
-                    guard let error = error else {
-                        return callback(nil, OktaOidcError.APIError("Authorization Error"))
-                    }
-                    if (error as NSError).code == OKTErrorCode.userCanceledAuthorizationFlow.rawValue {
-                        return callback(nil, OktaOidcError.userCancelledAuthorizationFlow)
-                    } else {
-                        return callback(nil, OktaOidcError.APIError("Authorization Error: \(error.localizedDescription)"))
-                    }
+                if let authResponse = authorizationResponse {
+                    callback(authResponse, nil)
+                    return
                 }
-                callback(authResponse, nil)
+                
+                guard let error = error else {
+                    callback(nil, OktaOidcError.api(message: "Authorization Error: No authorization response", underlyingError: nil))
+                    return
+                }
+                
+                if (error as NSError).code == OKTErrorCode.userCanceledAuthorizationFlow.rawValue {
+                    callback(nil, OktaOidcError.userCancelledAuthorizationFlow)
+                    return
+                }
+
+                if (error as NSError).code == OKTErrorCode.browserOpenError.rawValue {
+                    callback(nil, OktaOidcError.unableToOpenBrowser)
+                    return
+                }
+                
+                return callback(nil, OktaOidcError.api(message: "Authorization Error: \(error.localizedDescription)", underlyingError: error))
             }
             self.userAgentSession = userAgentSession
         }
@@ -83,7 +95,7 @@ class OktaOidcBrowserTask: OktaOidcTask {
                                                postLogoutRedirectURL: successRedirectURL,
                                                additionalParameters: self.config.additionalParams)
             guard let externalUserAgent = self.externalUserAgent() else {
-                callback(nil, OktaOidcError.APIError("Authorization Error: \(error?.localizedDescription ?? "No external User Agent.")"))
+                callback(nil, OktaOidcError.api(message: "Authorization Error: \(error?.localizedDescription ?? "No external User Agent.")", underlyingError: nil))
                 return
             }
             
@@ -92,7 +104,7 @@ class OktaOidcBrowserTask: OktaOidcTask {
                 
                 var error: OktaOidcError?
                 if let responseError = responseError {
-                    error = OktaOidcError.APIError("Sign Out Error: \(responseError.localizedDescription)")
+                    error = OktaOidcError.api(message: "Sign Out Error: \(responseError.localizedDescription)", underlyingError: nil)
                 }
                 
                 callback((), error)

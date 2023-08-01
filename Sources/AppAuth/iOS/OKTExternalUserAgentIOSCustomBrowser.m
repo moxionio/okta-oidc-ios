@@ -131,7 +131,7 @@ NS_ASSUME_NONNULL_BEGIN
 }
 
 - (BOOL)presentExternalUserAgentRequest:(nonnull id<OKTExternalUserAgentRequest>)request
-                                session:(nonnull id<OKTExternalUserAgentSession>)session {
+                                session:(nonnull id<OKTExternalUserAgentSession>)session NS_EXTENSION_UNAVAILABLE_IOS("") {
   // If the app store URL is set, checks if the app is installed and if not opens the app store.
   if (_appStoreURL && _canOpenURLScheme) {
     // Verifies existence of LSApplicationQueriesSchemes Info.plist key.
@@ -145,7 +145,8 @@ NS_ASSUME_NONNULL_BEGIN
     NSString *testURLString = [NSString stringWithFormat:@"%@://example.com", _canOpenURLScheme];
     NSURL *testURL = [NSURL URLWithString:testURLString];
     if (![[UIApplication sharedApplication] canOpenURL:testURL]) {
-      [[UIApplication sharedApplication] openURL:_appStoreURL];
+      [[UIApplication sharedApplication] openURL:_appStoreURL options:@{} completionHandler:nil];
+      
       return NO;
     }
   }
@@ -153,7 +154,19 @@ NS_ASSUME_NONNULL_BEGIN
   // Transforms the request URL and opens it.
   NSURL *requestURL = [request externalUserAgentRequestURL];
   requestURL = _URLTransformation(requestURL);
-  BOOL openedInBrowser = [[UIApplication sharedApplication] openURL:requestURL];
+    
+  __block BOOL openedInBrowser = NO;
+  
+  dispatch_group_t group = dispatch_group_create();
+  
+  dispatch_group_enter(group);
+  [[UIApplication sharedApplication] openURL:requestURL options:@{} completionHandler:^(BOOL success) {
+      openedInBrowser = success;
+      dispatch_group_leave(group);
+  }];
+  
+  dispatch_group_wait(group, DISPATCH_TIME_FOREVER);
+
   return openedInBrowser;
 }
 

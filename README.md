@@ -1,7 +1,5 @@
-![iOS_14 ready](https://img.shields.io/badge/iOS%2014-IN%20PROGRESS-green?style=for-the-badge&logo=apple)
-
 [<img src="https://aws1.discourse-cdn.com/standard14/uploads/oktadev/original/1X/0c6402653dfb70edc661d4976a43a46f33e5e919.png" align="right" width="256px"/>](https://devforum.okta.com/)
-[![CI Status](http://img.shields.io/travis/okta/okta-oidc-ios.svg?style=flat)](https://travis-ci.com/okta/okta-oidc-ios)
+[![CI Status](https://github.com/okta/okta-oidc-ios/actions/workflows/okta-oidc.yml/badge.svg)](https://travis-ci.com/okta/okta-oidc-ios)
 [![Carthage compatible](https://img.shields.io/badge/Carthage-compatible-4BC51D.svg?style=flat)](https://github.com/Carthage/Carthage)
 [![Version](https://img.shields.io/cocoapods/v/OktaOidc.svg?style=flat)](http://cocoapods.org/pods/OktaOidc)
 [![License](https://img.shields.io/cocoapods/l/OktaOidc.svg?style=flat)](http://cocoapods.org/pods/OktaOidc)
@@ -12,9 +10,9 @@
 
 > This is a new version of this SDK, the new pod name is [OktaOidc](https://cocoapods.org/pods/OktaOidc). The old [OktaAuth](https://cocoapods.org/pods/OktaAuth) pod is now deprecated. 
 
-This library is a swift wrapper around the [AppAuth-iOS](https://github.com/openid/AppAuth-iOS) objective-c code for communicating with Okta as an OAuth 2.0 + OpenID Connect provider, and follows current best practice for native apps using [Authorization Code Flow + PKCE](https://developer.okta.com/authentication-guide/implementing-authentication/auth-code-pkce).
+This library is a Swift wrapper around the [AppAuth-iOS](https://github.com/openid/AppAuth-iOS) Objective-C code for communicating with Okta as an OAuth 2.0 + OpenID Connect provider, and follows current best practice for native apps using [Authorization Code Flow + PKCE](https://developer.okta.com/authentication-guide/implementing-authentication/auth-code-pkce).
 
-You can learn more on the [Okta + iOS](https://developer.okta.com/code/ios/) page in our documentation. You can also download our [sample application](https://github.com/okta/samples-ios/tree/master/browser-sign-in) 
+You can learn more on the [Okta + iOS](https://developer.okta.com/code/ios/) page in our documentation. You can also download our [sample application](https://github.com/okta/samples-ios/tree/master/browser-sign-in).
 
 **Table of Contents**
 
@@ -40,7 +38,9 @@ You can learn more on the [Okta + iOS](https://developer.okta.com/code/ios/) pag
 - [Development](#development)
   - [Running Tests](#running-tests)
 - [Modify network requests](#modify-network-requests)
+- [Migration](#migration)
 - [Known issues](#known-issues)
+- [Contributing](#contributing)
 
 <!-- /TOC -->
 
@@ -53,13 +53,15 @@ You'll also need:
 - An Okta account, called an _organization_ (sign up for a free [developer organization](https://developer.okta.com/signup/) if you need one).
 - An Okta Application, configured as a Native App. This is done from the Okta Developer Console and you can find instructions [here](https://developer.okta.com/authentication-guide/implementing-authentication/auth-code-pkce). When following the wizard, use the default properties. They are designed to work with our sample applications.
 
+**Note:** If you would like to use your own in-app user interface instead of the web browser, you can do so by using our [Swift Authentication SDK](https://github.com/okta/okta-auth-swift).
+
 ## Supported Platforms
 
 ### iOS
 Okta OIDC supports iOS 11 and above.
 
 ### macOS
-Okta OIDC supports macOS (OS X) 10.10 and above. Library supports both custom schemes; a loopback HTTP redirects via a small embedded server.
+Okta OIDC supports macOS (OS X) 10.14 and above. Library supports both custom schemes; a loopback HTTP redirects via a small embedded server.
 
 ## Install
 
@@ -83,7 +85,7 @@ pod 'OktaOidc'
 Then install it into your project:
 
 ```bash
-pod install
+pod install --repo-update
 ```
 
 ### Carthage
@@ -92,6 +94,12 @@ To integrate this SDK into your Xcode project using [Carthage](https://github.co
 ```ruby
 github "okta/okta-oidc-ios"
 ```
+
+Then install it into your project:
+
+`carthage update --use-xcframeworks`
+
+**Note:** Make sure Carthage version is 0.37.0 or higher. Otherwise, Carthage can fail.
 
 ## Usage Guide
 
@@ -151,7 +159,7 @@ The easiest way is to create a property list in your application's bundle. By de
 
 ### Configuration object
 
-Alternatively, you can create a configuration object ( `OktaOidcConfig`) from dictionary with the required values:
+Alternatively, you can create a configuration object (`OktaOidcConfig`) from dictionary with the required values:
 
 ```swift
 let configuration = OktaOidcConfig(with: [
@@ -176,6 +184,17 @@ if #available(iOS 13.0, *) {
 }
 ```
 ***Note*** Flag is available on iOS 13 and above versions
+
+
+### Token Time Validation
+
+Custom token time validation is possible by adopting to `OKTTokenValidator` protocol and then setting `tokenValidator` variable: 
+
+```swift
+configuration?.tokenValidator = self
+```
+
+By default `OKTDefaultTokenValidator` object is set. 
 
 ### How to use in Objective-C project
 
@@ -205,7 +224,7 @@ oktaOidc.signInWithBrowser(from: viewController, additionalParameters: ["idp": "
   // stateManager.refreshToken
 }
 ```
-Sample app [example](https://github.com/okta/samples-ios/blob/master/browser-sign-in/OktaBrowserSignIn/WelcomeViewController.swift#L35-L46)
+Sample app [example](https://github.com/okta/samples-ios/blob/master/browser-sign-in/OktaBrowserSignIn/WelcomeViewController.swift#L35-L46).
 
 #### macOS
 ```swift
@@ -240,7 +259,7 @@ oktaOidc.signOutOfOkta(authStateManager, from: viewController) { error in
   }
 }
 ```
-Sample app [example](https://github.com/okta/samples-ios/blob/master/browser-sign-in/OktaBrowserSignIn/SignInViewController.swift#L62-L74)
+Sample app [example](https://github.com/okta/samples-ios/blob/master/browser-sign-in/OktaBrowserSignIn/SignInViewController.swift#L62-L74).
 
 #### macOS
 ```swift
@@ -260,12 +279,12 @@ oktaOidc.signOutOfOkta(authStateManager: authStateManager, redirectServerConfigu
 
 This method helps to perform a multi-step sign-out flow. The method provides options that you want to perform and the SDK runs the options as a batch.
 The available options are:
-- revokeAccessToken - SDK revokes access token
-- revokeRefreshToken - SDK revokes refresh token
-- removeTokensFromStorage - SDK removes tokens from the secure storage
-- signOutFromOkta - SDK calls [`signOutOfOkta`](#signoutofokta)
-- revokeTokensOptions - revokes access and refresh tokens
-- allOptions - revokes tokens, signs out from Okta, and removes tokens from the secure storage
+- `revokeAccessToken` - SDK revokes access token
+- `revokeRefreshToken` - SDK revokes refresh token
+- `removeTokensFromStorage` - SDK removes tokens from the secure storage
+- `signOutFromOkta` - SDK calls [`signOutOfOkta`](#signoutofokta)
+- `revokeTokensOptions` - revokes access and refresh tokens
+- `allOptions` - revokes tokens, signs out from Okta, and removes tokens from the secure storage
 
 The order of operations performed by the SDK:
 1. Revoke the access token, if the option is set. If this step fails step 3 will be omitted.
@@ -333,7 +352,7 @@ oktaOidc.authenticate(withSessionToken: token) { stateManager, error in
   // stateManager.refreshToken
 }
 ```
-Sample app [example](https://github.com/okta/samples-ios/blob/master/custom-sign-in/OktaNativeLogin/UserProfile/UserProfileViewController.swift#L39-L50)
+Sample app [example](https://github.com/okta/samples-ios/blob/master/custom-sign-in/OktaNativeLogin/UserProfile/UserProfileViewController.swift#L39-L50).
 
 ### stateManager
 
@@ -352,9 +371,9 @@ oktaOidc.signInWithBrowser(from: self) { stateManager, error in
   stateManager.writeToSecureStorage()
 }
 ```
-Sample app [example](https://github.com/okta/samples-ios/blob/master/browser-sign-in/OktaBrowserSignIn/WelcomeViewController.swift#L44)
+Sample app [example](https://github.com/okta/samples-ios/blob/master/browser-sign-in/OktaBrowserSignIn/WelcomeViewController.swift#L44).
 
-To retrieve stored manager call `readFromSecureStorage(for: )` and pass here Okta configuration that corresponds to a manager you are interested in.
+To retrieve stored manager call `readFromSecureStorage(for:)` and pass here Okta configuration that corresponds to a manager you are interested in.
 
 ```swift
 guard let stateManager = OktaOidcStateManager.readFromSecureStorage(for: oktaConfig) else {
@@ -366,7 +385,7 @@ guard let stateManager = OktaOidcStateManager.readFromSecureStorage(for: oktaCon
 // stateManager.idToken
 // stateManager.refreshToken
 ```
-Sample app [example](https://github.com/okta/samples-ios/blob/master/browser-sign-in/OktaBrowserSignIn/AppDelegate.swift#L32)
+Sample app [example](https://github.com/okta/samples-ios/blob/master/browser-sign-in/OktaBrowserSignIn/AppDelegate.swift#L32).
 
 **Note:** In OktaOidc SDK 3.0 we added support for multiple Oauth 2.0 accounts. So developer can use Okta endpoint, social endpoint and others in one application. Therefore `OktaOidcStateManager` is stored in keychain using composite key constructed based on configuration. For backward compatibility there is a method `readFromSecureStorage()` that tries to read `OktaOidcStateManager` stored on a legacy way, so user could retrieve previously stored `OktaOidcStateManager` after switching to a newer version of SDK. 
 
@@ -384,7 +403,7 @@ stateManager?.introspect(token: accessToken, callback: { payload, error in
   print("Is token valid? \(isValid)")
 })
 ```
-Sample app [example](https://github.com/okta/samples-ios/blob/master/browser-sign-in/OktaBrowserSignIn/TokensViewController.swift#L38-L47)
+Sample app [example](https://github.com/okta/samples-ios/blob/master/browser-sign-in/OktaBrowserSignIn/TokensViewController.swift#L38-L47).
 
 #### renew
 
@@ -400,7 +419,7 @@ stateManager?.renew { newAccessToken, error in
   // renewed TokenManager
 }
 ```
-Sample app [example](https://github.com/okta/samples-ios/blob/master/browser-sign-in/OktaBrowserSignIn/TokensViewController.swift#L51-L59)
+Sample app [example](https://github.com/okta/samples-ios/blob/master/browser-sign-in/OktaBrowserSignIn/TokensViewController.swift#L51-L59).
 
 #### revoke
 
@@ -416,7 +435,7 @@ stateManager?.revoke(accessToken) { response, error in
   // Token was revoked
 }
 ```
-Sample app [example](https://github.com/okta/samples-ios/blob/master/browser-sign-in/OktaBrowserSignIn/TokensViewController.swift#L65-L75)
+Sample app [example](https://github.com/okta/samples-ios/blob/master/browser-sign-in/OktaBrowserSignIn/TokensViewController.swift#L65-L75).
 
 #### getUser
 
@@ -432,17 +451,19 @@ stateManager?.getUser { response, error in
   // JSON response
 }
 ```
-Sample app [example](https://github.com/okta/samples-ios/blob/master/browser-sign-in/OktaBrowserSignIn/SignInViewController.swift#L28-L38)
+Sample app [example](https://github.com/okta/samples-ios/blob/master/browser-sign-in/OktaBrowserSignIn/SignInViewController.swift#L28-L38).
 
 #### clear
 
 Removes the local authentication state by removing cached tokens in the keychain.
-**Note:** SDK deletes all keychain items accessible to an application.
+
+
+**Warning:** SDK deletes all keychain items accessible to an application.
 
 ```swift
 stateManager.clear()
 ```
-Sample app [example](https://github.com/okta/samples-ios/blob/master/browser-sign-in/OktaBrowserSignIn/SignInViewController.swift#L70)
+Sample app [example](https://github.com/okta/samples-ios/blob/master/browser-sign-in/OktaBrowserSignIn/SignInViewController.swift#L70).
 
 ## Development
 
@@ -462,7 +483,7 @@ export LOGOUT_REDIRECT_URI={logoutRedirectUri}
 bash ./scripts/build-and-test.sh
 ```
 
-**Note:** *You may need to update the emulator device to match your Xcode version*
+**Note:** *You may need to update the emulator device to match your Xcode version.*
 
 ## Modify network requests
 
@@ -498,6 +519,20 @@ extension SomeNSObject: OktaNetworkRequestCustomizationDelegate {
 
 ***Note:*** It is highly recommended to copy all of the existing parameters from the original URLRequest object to modified request without any changes. Altering of this data could lead network request to fail. If `customizableURLRequest(_:)` method returns `nil` default request will be used.
 
+## Migration
+
+### Migrating from 3.10.x to 3.11.x
+
+The SDK `okta-oidc-ios` has a major changes in error handling. Consider these guidelines to update your code.
+
+- `APIError` is renamed as `api`.
+- `api` error has the additional parameter `underlyingError`, it's an optional and indicates the origin of the error.
+- Introduced a new error `authorization(error:description:)`.
+- `authorization` error appears when authorization server fails due to errors during authorization.
+- `unexpectedAuthCodeResponse(statusCode:)` has an error code parameter.
+- `OktaOidcError` conforms to `CustomNSError` protocol. It means you can convert the error to `NSError` and get `code`, `userInfo`, `domain`, `underlyingErrors`.
+- `OktaOidcError` conforms to `Equatable` protocol. The errors can be compared for equality using the operator `==` or inequality using the operator `!=`.
+
 ## Known issues
 
 ### iOS shows permission dialog(`{App} Wants to Use {Auth Domain} to Sign In`) for Okta Sign Out flows
@@ -505,53 +540,9 @@ Known iOS issue where iOS doesn't provide any good ways to terminate active auth
 
 You can also consider the following workarounds:
 - Use `noSSO` option in OIDC configuration object if you don't need SSO capabilites. Also note that this option works only on iOS 13+ versions
-- Fork repository and change user-agent implementation(`OIDExternalUserAgentIOS.m`) to use `SFSafariViewController` only. Some pitfalls of this approach described [here](https://github.com/okta/okta-oidc-ios/issues/181)
+- Fork repository and change user-agent implementation(`OIDExternalUserAgentIOS.m`) to use `SFSafariViewController` only. Some pitfalls of this approach described [here](https://github.com/okta/okta-oidc-ios/issues/181).
 
-### Carthage fails on Xcode 12 
-Carthage throws the error when you install the dependencies with the command `carthage update`. The issue happens only on Xcode 12 and higher versions:
+## Contributing
 
-```bash
-Build Failed
-	Task failed with exit code 1:
-	/usr/bin/xcrun lipo -create /Users/user/Library/Caches/org.carthage.CarthageKit/DerivedData/12.4_12D4e/okta-oidc-ios/3.10.1/Build/Intermediates.noindex/ArchiveIntermediates/okta-oidc/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/OktaOidc.framework/OktaOidc /Users/user/Library/Caches/org.carthage.CarthageKit/DerivedData/12.4_12D4e/okta-oidc-ios/3.10.1/Build/Products/Release-iphonesimulator/OktaOidc.framework/OktaOidc -output /Users/user/{ProjectName}/Carthage/Build/iOS/OktaOidc.framework/OktaOidc
+We welcome contributions to all of our open-source packages. Please, see the [contribution guide](CONTRIBUTING.md) to understand how to structure a contribution.
 
-This usually indicates that project itself failed to compile. Please check the xcodebuild log for more details: /var/folders/2x/q10zv0gx4112thm7dd13szmm0000gn/T/carthage-xcodebuild.YaJjLW.log
-```
-
-The reason is that Xcode 12 introduced support of the Apple Silicon and Xcode generates duplicated architectures in frameworks. XCFrameworks are still not supported by Carthage, therefore a workaround should be used.
-
-##### Solution #1: XCFrameworks
-
-You should update Carthage to the version 0.37.0 or higher. 
-
-1. Run in Terminal the following command:
-```bash
-brew upgrade carthage
-```
-2. Make sure the version is correct: 
-```bash
-carthage version
-```
-3. Navigate through Terminal to project folder and run: 
-```bash
-carthage update --use-xcframeworks
-```
-4. Open `General` settings tab in Xcode, in the `Frameworks, Libraries, and Embedded Content` section, drag and drop each XCFramework you want to use from the `Carthage/Build` folder.
-
-> If your existing project is based on discrete framework bundles and you may want to migrate to XCFrameworks, then follow [Carthage migration documentation](https://github.com/Carthage/Carthage#migrating-a-project-from-framework-bundles-to-xcframeworks).
-
-##### Solution #2: Workaround script
-
-Launch Carthage via [the script](/scripts/carthage-xcode-12.sh), it will remove duplicated architectures and produce correct framework bundles.
-
-1. Put the script somewhere to your `PATH` (e.g.: `/usr/local/bin/carthage.sh`).
-2. Make the script executable, so open your Terminal and execute:
-```sh
-chmod +x /{path_to_script_folder}/carthage.sh
-```
-3. Run the script whenever you want to use Carthage:
-```sh
-carthage.sh update
-```
-
-For more information, follow [official Carthage documentation](https://github.com/Carthage/Carthage/blob/master/Documentation/Xcode12Workaround.md#workaround).

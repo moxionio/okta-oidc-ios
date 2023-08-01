@@ -29,7 +29,6 @@ final class ViewController: UIViewController {
     private var oktaAppAuth: OktaOidc?
     private var authStateManager: OktaOidcStateManager? {
         didSet {
-            oldValue?.clear()
             authStateManager?.writeToSecureStorage()
         }
     }
@@ -53,11 +52,14 @@ final class ViewController: UIViewController {
         
         let configuration = try? OktaOidcConfig.default()
         configuration?.requestCustomizationDelegate = self
+        
+        configuration?.tokenValidator = self
+        
         oktaAppAuth = try? OktaOidc(configuration: isUITest ? testConfig : configuration)
         AppDelegate.shared.oktaOidc = oktaAppAuth
-        
         if let config = oktaAppAuth?.configuration {
             authStateManager = OktaOidcStateManager.readFromSecureStorage(for: config)
+            authStateManager?.requestCustomizationDelegate = self
         }
     }
 
@@ -65,7 +67,7 @@ final class ViewController: UIViewController {
         super.viewWillAppear(animated)
         
         guard oktaAppAuth != nil else {
-            self.updateUI(updateText: "SDK is not configured!")
+            self.showMessage("SDK is not configured!")
             return
         }
         
@@ -94,7 +96,6 @@ final class ViewController: UIViewController {
     }
 
     @IBAction func clearTokens(_ sender: Any) {
-        authStateManager?.clear()
         try? authStateManager?.removeFromSecureStorage()
         authStateManager = nil
         
@@ -104,39 +105,61 @@ final class ViewController: UIViewController {
     @IBAction func userInfoButton(_ sender: Any) {
         authStateManager?.getUser() { response, error in
             if let error = error {
-                self.updateUI(updateText: "Error: \(error)")
+                self.showMessage(error)
                 return
             }
 
             if response != nil {
                 var userInfoText = ""
                 response?.forEach { userInfoText += ("\($0): \($1) \n") }
-                self.updateUI(updateText: userInfoText)
+                self.showMessage(userInfoText)
             }
         }
     }
 
     @IBAction func introspectButton(_ sender: Any) {
         // Get current accessToken
-        guard let accessToken = authStateManager?.accessToken else { return }
-
-        authStateManager?.introspect(token: accessToken, callback: { payload, error in
-            guard let isValid = payload?["active"] as? Bool else {
-                self.updateUI(updateText: "Error: \(error?.localizedDescription ?? "Unknown")")
-                return
+        var accessToken = authStateManager?.accessToken
+        if accessToken == nil {
+            authStateManager?.renew { newAuthStateManager, error in
+                if let error = error {
+                    // Error
+                    print("Error trying to Refresh AccessToken: \(error)")
+                    return
+                }
+                self.authStateManager = newAuthStateManager
+                accessToken = newAuthStateManager?.accessToken
+                
+                self.authStateManager?.introspect(token: accessToken, callback: { payload, error in
+                    guard let isValid = payload?["active"] as? Bool else {
+                        self.showMessage("Error: \(error?.localizedDescription ?? "Unknown")")
+                        return
+                    }
+                    
+                    self.showMessage("Is the AccessToken valid? - \(isValid)")
+                })
             }
-            
-            self.updateUI(updateText: "Is the AccessToken valid? - \(isValid)")
-        })
+        } else {
+            authStateManager?.introspect(token: accessToken, callback: { payload, error in
+                guard let isValid = payload?["active"] as? Bool else {
+                    self.showMessage("Error: \(error?.localizedDescription ?? "Unknown")")
+                    return
+                }
+
+                self.showMessage("Is the AccessToken valid? - \(isValid)")
+            })
+        }
     }
 
     @IBAction func revokeButton(_ sender: Any) {
         // Get current accessToken
-        guard let accessToken = authStateManager?.accessToken else { return }
+        guard let accessToken = authStateManager?.accessToken else {
+            return
+        }
 
         authStateManager?.revoke(accessToken) { _, error in
-            if error != nil { self.updateUI(updateText: "Error: \(error!)") }
-            self.updateUI(updateText: "AccessToken was revoked")
+            if error != nil { self.showMessage("Error: \(error!)") }
+            self.showMessage("AccessToken was revoked")
         }
     }
 
@@ -144,7 +167,7 @@ final class ViewController: UIViewController {
         oktaAppAuth?.signInWithBrowser(from: self) { authStateManager, error in
             if let error = error {
                 self.authStateManager = nil
-                self.updateUI(updateText: "Error: \(error)")
+                self.showMessage("Error: \(error.localizedDescription)")
                 return
             }
             
@@ -159,9 +182,9 @@ final class ViewController: UIViewController {
         oktaAppAuth?.signOut(authStateManager: authStateManager, from: self, progressHandler: { currentOption in
             switch currentOption {
             case .revokeAccessToken, .revokeRefreshToken, .removeTokensFromStorage, .revokeTokensOptions:
-                self.updateUI(updateText: "Revoking tokens...")
+                self.showMessage("Revoking tokens...")
             case .signOutFromOkta:
-                self.updateUI(updateText: "Signing out from Okta...")
+                self.showMessage("Signing out from Okta...")
             default:
                 break
             }
@@ -170,13 +193,21 @@ final class ViewController: UIViewController {
                 self.authStateManager = nil
                 self.buildTokenTextView()
             } else {
-                self.updateUI(updateText: "Error: failed to logout")
+                self.showMessage("Error: failed to logout")
             }
         })
     }
-
-    func updateUI(updateText: String) {
-        tokenView.text = updateText
+    
+    func showMessage(_ message: String) {
+        tokenView.text = message
+    }
+    
+    func showMessage(_ error: Error) {
+        if let oidcError = error as? OktaOidcError {
+            tokenView.text = oidcError.displayMessage
+        } else {
+            tokenView.text = error.localizedDescription
+        }
     }
 
     func buildTokenTextView() {
@@ -198,7 +229,7 @@ final class ViewController: UIViewController {
             tokenString += "\nRefresh Token: \(refreshToken)\n"
         }
 
-        self.updateUI(updateText: tokenString)
+        self.showMessage(tokenString)
     }
 }
 
@@ -213,6 +244,55 @@ extension ViewController: OktaNetworkRequestCustomizationDelegate {
     func didReceive(_ response: URLResponse?) {
         if let response = response {
             print("response: \(response)")
+        }
+    }
+}
+
+extension ViewController: OKTTokenValidator {
+    func isIssued(atDateValid issuedAt: Date?, token: OKTTokenType) -> Bool {
+        guard let issuedAt = issuedAt else {
+            return false
+        }
+        
+        let now = Date()
+        
+        return fabs(now.timeIntervalSince(issuedAt)) <= 200
+    }
+    
+    func isDateExpired(_ expiry: Date?, token tokenType: OKTTokenType) -> Bool {
+        guard let expiry = expiry else {
+            return false
+        }
+        
+        let now = Date()
+
+        return now >= expiry
+    }
+}
+
+extension OktaOidcError {
+    var displayMessage: String {
+        switch self {
+        case let .api(message, _):
+            switch (self as NSError).code {
+            case NSURLErrorNotConnectedToInternet,
+                NSURLErrorNetworkConnectionLost,
+                NSURLErrorCannotLoadFromNetwork,
+                NSURLErrorCancelled:
+                return "No Internet Connection"
+            case NSURLErrorTimedOut:
+                return "Connection timed out"
+            default:
+                break
+            }
+            
+            return "API Error occurred: \(message)"
+        case let .authorization(error, _):
+            return "Authorization error: \(error)"
+        case let .unexpectedAuthCodeResponse(statusCode):
+            return "Authorization failed due to incorrect status code: \(statusCode)"
+        default:
+            return localizedDescription
         }
     }
 }

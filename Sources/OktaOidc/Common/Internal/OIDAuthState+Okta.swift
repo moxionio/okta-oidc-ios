@@ -17,38 +17,50 @@ import OktaOidc_AppAuth
 // Okta Extension of OIDAuthState
 extension OKTAuthState {
 
-    static func getState(withAuthRequest authRequest: OKTAuthorizationRequest, delegate: OktaNetworkRequestCustomizationDelegate? = nil, callback: @escaping (OKTAuthState?, OktaOidcError?) -> Void ) {
+    static func getState(withAuthRequest authRequest: OKTAuthorizationRequest, delegate: OktaNetworkRequestCustomizationDelegate? = nil, validator: OKTTokenValidator, callback finalize: @escaping (OKTAuthState?, OktaOidcError?) -> Void ) {
         
-        let finalize: ((OKTAuthState?, OktaOidcError?) -> Void) = { state, error in
-            callback(state, error)
-        }
-
         // Make authCode request
-        OKTAuthorizationService.perform(authRequest: authRequest, delegate: delegate, callback: { authResponse, error in
+        OKTAuthorizationService.perform(authRequest: authRequest, delegate: delegate) { authResponse, error in
             guard let authResponse = authResponse else {
-                finalize(nil, OktaOidcError.APIError("Authorization Error: \(error?.localizedDescription ?? "No authentication response.")"))
+                finalize(nil, .api(message: "Authorization Error: \(error?.localizedDescription ?? "No authentication response.")", underlyingError: error))
                 return
             }
-
+            
+            if let oauthError = authResponse.additionalParameters?[OKTOAuthErrorFieldError] as? String {
+                let oauthErrorDescription = authResponse.additionalParameters?[OKTOAuthErrorFieldErrorDescription] as? String
+                finalize(nil, .authorization(error: oauthError, description: oauthErrorDescription))
+                return
+            }
+            
             guard authResponse.authorizationCode != nil,
                   let tokenRequest = authResponse.tokenExchangeRequest() else {
-                    finalize(nil, OktaOidcError.unableToGetAuthCode)
+                    finalize(nil, .unableToGetAuthCode)
                     return
             }
 
             // Make token request
-            OKTAuthorizationService.perform(tokenRequest, originalAuthorizationResponse: authResponse, delegate: delegate, callback: { tokenResponse, error in
+            OKTAuthorizationService.perform(tokenRequest,
+                                            originalAuthorizationResponse: authResponse,
+                                            delegate: delegate,
+                                            validator: validator) { tokenResponse, error in
                 guard let tokenResponse = tokenResponse else {
-                    finalize(nil, OktaOidcError.APIError("Authorization Error: \(error?.localizedDescription ?? "No token response.")"))
+                    finalize(nil, OktaOidcError.api(message: "Authorization Error: \(error?.localizedDescription ?? "No token response.")", underlyingError: error))
+                    return
+                }
+                
+                if let oauthError = tokenResponse.additionalParameters?[OKTOAuthErrorFieldError] as? String {
+                    let oauthErrorDescription = tokenResponse.additionalParameters?[OKTOAuthErrorFieldErrorDescription] as? String
+                    finalize(nil, .authorization(error: oauthError, description: oauthErrorDescription))
                     return
                 }
 
                 let authState = OKTAuthState(authorizationResponse: authResponse,
                                              tokenResponse: tokenResponse,
                                              registrationResponse: nil,
-                                             delegate: delegate)
+                                             delegate: delegate,
+                                             validator: validator)
                 finalize(authState, nil)
-            })
-        })
+            }
+        }
     }
 }
